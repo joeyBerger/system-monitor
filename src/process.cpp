@@ -20,21 +20,9 @@ int Process::Pid() { return pid_; }
 
 // Return this process's CPU utilization
 float Process::CpuUtilization() { 
-  //https://stackoverflow.com/questions/16726779/how-do-i-get-the-total-cpu-usage-of-an-application-from-proc-pid-stat/16736599#16736599
-  
-  vector<string> times = LinuxParser::CpuUtilization(Pid());
-  float uptime = (float)UpTime() * sysconf(_SC_CLK_TCK);
-  float utime = stof(times[0]);
-  float stime = stof(times[1]);
-  float cutime = stof(times[2]);
-  float cstime = stof(times[3]);
-  float starttime = stof(times[4]);
-  float hertz = sysconf(_SC_CLK_TCK);
-  
-  float total_time = utime + stime + cutime + cstime;
-  float seconds = uptime - (starttime / hertz);
-
-  return (total_time / hertz) / seconds;
+  long total_jiffies = LinuxParser::ActiveJiffies(Pid());
+  long time = total_jiffies / sysconf(_SC_CLK_TCK);
+  return (float)time / float(UpTime());
 }
 
 // Return the command that generated this process
@@ -47,7 +35,8 @@ string Process::Ram() { return LinuxParser::Ram(Pid()); }
 string Process::User() { return LinuxParser::User(Pid()); }
 
 // Return the age of this process (in seconds)
-long int Process::UpTime() { return LinuxParser::UpTime(pid_) / sysconf(_SC_CLK_TCK); }
+// long int Process::UpTime() { return LinuxParser::UpTime(pid_) / sysconf(_SC_CLK_TCK); }
+long int Process::UpTime() { return LinuxParser::UpTime(pid_); }
 
 // Overload the "less than" comparison operator for Process objects
 bool Process::operator<(Process& a) {

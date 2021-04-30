@@ -105,71 +105,39 @@ long LinuxParser::UpTime() {
 // Read and return the number of jiffies for the system
 long LinuxParser::Jiffies() { return ActiveJiffies() + IdleJiffies();}
 
+// Read and return the number of active jiffies for a PID
+long LinuxParser::ActiveJiffies(int pid) {
+  vector <string> utilization_stats = CpuUtilization(pid);
+  return std::stol(utilization_stats[13]) + std::stol(utilization_stats[14]) + std::stol(utilization_stats[15]) + std::stol(utilization_stats[16]);
+}
 
 // Read and return the number of active jiffies for the system
 long LinuxParser::ActiveJiffies() { 
-  //active_jiffies = (user + nice + system + irq + softirq + steal + guest + guest_nice);
-  string line, jiffy;
-  int totalAvailableJiffies = 10, i = 0, idx = 0;
-  long tally = 0;
-  int activeJiffes [] = {1,2,3,6,7,8,9,10};
-  std::ifstream filestream(kProcDirectory + kStatFilename);
-  if (filestream.is_open()) {   
-    std::getline(filestream, line);
-    std::istringstream ssin(line);
-    while (ssin.good() && i < totalAvailableJiffies+1) {
-      ssin >> jiffy;      
-	  if (i == activeJiffes[idx]) {
-        tally += stoi(jiffy);
-        idx++;
-      }
-      i++;
-    }
-  }  
-  return tally;
+  vector <string> utilization_stats = CpuUtilization();
+  return std::stol(utilization_stats[kUser_]) + std::stol(utilization_stats[kNice_]) + std::stol(utilization_stats[kSystem_]) +
+         std::stol(utilization_stats[kIRQ_]) + std::stol(utilization_stats[kSoftIRQ_]) + std::stol(utilization_stats[kSteal_]);
 }
 
 // Read and return the number of idle jiffies for the system
 long LinuxParser::IdleJiffies() { 
-  //idle_jiffies = iowait;
-  string line, jiffy;
-  int i = 0, targetIdleJiffy = 4;
-  std::ifstream filestream(kProcDirectory + kStatFilename);
-  if (filestream.is_open()) {   
-    std::getline(filestream, line);
-    std::istringstream ssin(line);
-    while (ssin.good()) {
-      ssin >> jiffy;      
-	  if (i == targetIdleJiffy + 1) {
-		return stoi(jiffy);
-      }
-      i++;
-    }
-  }  
-  return 0;
+  vector <string> utilization_stats = CpuUtilization();
+  return std::stol(utilization_stats[kIdle_]) + std::stol(utilization_stats[kIOwait_]);
 }
 
 // Read and return CPU utilization
 vector<string> LinuxParser::CpuUtilization(int pid) { 
-  
-  string line, time;
-  int time_indices [] = {13,14,15,16,21}, numbers_sought = 5, i = 0, idx = 0;
-  std::ifstream filestream(kProcDirectory + to_string(pid) + kStatFilename);
+  string line, t;
   vector<string> return_vec;
-  if (filestream.is_open()) {   
+  std::ifstream filestream(kProcDirectory + to_string(pid) + kStatFilename);
+  if (filestream.is_open()) {  
     std::getline(filestream, line);
     std::istringstream ssin(line);
     while (ssin.good()) {
-      ssin >> time;      
-	  if (i == time_indices[idx]) {
-        return_vec.push_back(time);
-        idx++;
-        if (idx == numbers_sought) return return_vec;
-      }
-      i++;
+      ssin >> t;
+      return_vec.push_back(t);
     }
-  }    
-  return {}; 
+  }
+  return return_vec;
 }
 
 // Read and return the total number of processes
@@ -188,6 +156,24 @@ int LinuxParser::TotalProcesses() {
   }
   return 0; 
 }
+
+// Read cpu utilization and return vector for processing jiffy counts
+vector<string> LinuxParser::CpuUtilization() { 
+  vector <string> cpu_utilization;
+  string line, str;
+  std::ifstream filestream(kProcDirectory + kStatFilename);
+  if (filestream.is_open()) {
+    std::getline(filestream, line);
+    std::istringstream ssin(line);
+    while (ssin.good()) {
+      ssin >> str;
+      if (str != "cpu") cpu_utilization.push_back(str);      
+    }
+    filestream.close();
+  }
+  return cpu_utilization;
+}
+
 
 // Read and return the number of running processes
 int LinuxParser::RunningProcesses() { 
@@ -210,9 +196,10 @@ int LinuxParser::RunningProcesses() {
 string LinuxParser::Command(int pid) {
   string line;
   std::ifstream stream(kProcDirectory + std::to_string(pid) + kCmdlineFilename);
-  while (stream.is_open()) {
+  if (stream.is_open()) {
     std::getline(stream, line);
     std::istringstream linestream(line);
+    stream.close();
 	  return line;    
   }
   return string(); 
@@ -286,7 +273,7 @@ long LinuxParser::UpTime(int pid) {
       ssin >> time;
       i++;
     }
-    return std::stoi(time);
+    return UpTime() - (std::stoi(time) / sysconf(_SC_CLK_TCK));
   }
   return 0;
 }
